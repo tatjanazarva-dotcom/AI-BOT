@@ -1,0 +1,26 @@
+# секреты и локальная конфигурация
+.env
+
+# сессия Telethon и её служебные файлы
+*.session
+*.session-journal
+telegram_session*
+
+# БД и логи
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE / мусор
+.idea/
+.vscode/
+.DS_Store
+img.png

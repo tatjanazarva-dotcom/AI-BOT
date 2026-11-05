@@ -1,0 +1,71 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aibot
+      POSTGRES_PASSWORD: aibot
+      POSTGRES_DB: aibot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://aibot:aibot@postgres:5432/aibot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on: [redis, postgres]
+
+  # Парсинг сайтов + AI-генерация — можно параллелить
+  worker:
+    build: .
+    command: celery -A celery_worker.celery_app worker -Q default --loglevel=info
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://aibot:aibot@postgres:5432/aibot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on: [redis, postgres]
+
+  # Telegram (чтение каналов + публикация) — строго один процесс: одна сессия Telethon
+  worker-telegram:
+    build: .
+    command: celery -A celery_worker.celery_app worker -Q telegram --concurrency=1 -n telegram@%h --loglevel=info
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://aibot:aibot@postgres:5432/aibot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on: [redis, postgres]
+
+  beat:
+    build: .
+    command: celery -A celery_worker.celery_app beat --loglevel=info
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://aibot:aibot@postgres:5432/aibot
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    depends_on: [redis, postgres]
+
+volumes:
+  pgdata:
